@@ -8,7 +8,7 @@ from typing import List
 
 from bs4 import BeautifulSoup
 
-categories = {
+sex_categories = {
     'sportivnye-tovary-dlja-muzhchin.html': 74,
     # 'sportivnye-tovary-dlja-zhenshhin.html': 68,
     # 'sportivnye-tovary-dlja-detej.html': 25
@@ -17,11 +17,12 @@ url = 'https://ru.puma.com/'
 headers = {
     'X-Requested-With': 'XMLHttpRequest',
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15'}
+timeout = 30
 
 
 def main():
     urls = []
-    for sex_key, page_size in categories.items():
+    for sex_key, page_size in sex_categories.items():
         urls += [url + sex_key + f'?p={page}' for page in range(1, 20 + 1)]
     params = []
     for page_url in urls:
@@ -36,7 +37,6 @@ def main():
             data += parse_product_list(param)
         except Exception:
             traceback.print_exc()
-    print(data)
     with open('products.json', 'w') as f:
         f.write(json.dumps(data, ensure_ascii=False))
     save_as_sheet(data)
@@ -44,7 +44,7 @@ def main():
 
 def download_product_list(link: str):
     print(f'Loading: {link}')
-    res = requests.get(link, headers=headers, timeout=)
+    res = requests.get(link, headers=headers, timeout=timeout)
     json_data = res.json()
     return json_data['content']
 
@@ -74,7 +74,7 @@ def parse_product_list(html: str) -> List[Dict[str, str]]:
 
 def parse_product_item(link: str) -> Dict[str, str]:
     print(f'Loading product by link: {link}')
-    res = requests.get(link, headers=headers)
+    res = requests.get(link, headers=headers, timeout=timeout)
     content = res.content.decode()
     bs4 = BeautifulSoup(content, 'html.parser')
     sex = bs4.find_all('li', attrs={'class': 'breadcrumbs__item'})[1].get_text()
