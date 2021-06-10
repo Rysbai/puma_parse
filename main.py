@@ -23,7 +23,7 @@ timeout = 30
 def main():
     urls = []
     for sex_key, page_size in sex_categories.items():
-        urls += [url + sex_key + f'?p={page}' for page in range(1, 20 + 1)]
+        urls += [url + sex_key + f'?p={page}' for page in range(1, 2)]
     params = []
     for page_url in urls:
         try:
@@ -31,15 +31,18 @@ def main():
         except Exception:
             traceback.print_exc()
 
-    data = []
+    success_products = []
+    error_products = []
     for param in params:
         try:
-            data += parse_product_list(param)
+            success_parses, error_parses = parse_product_list(param)
+            success_products += success_parses
+            error_products += error_parses
         except Exception:
             traceback.print_exc()
     with open('products.json', 'w') as f:
-        f.write(json.dumps(data, ensure_ascii=False))
-    save_as_sheet(data)
+        f.write(json.dumps(success_products, ensure_ascii=False))
+    save_as_sheet(success_products, error_products)
 
 
 def download_product_list(link: str):
@@ -49,18 +52,20 @@ def download_product_list(link: str):
     return json_data['content']
 
 
-def parse_product_list(html: str) -> List[Dict[str, str]]:
+def parse_product_list(html: str) -> [List[Dict[str, str]], List[Dict[str, str]]]:
     data = []
+    errors = []
     bs = BeautifulSoup(html, 'html.parser')
     products = bs.find_all('div', attrs={'class': 'product-item'})
 
     for i, product in enumerate(products):
         name = product.find(attrs={'class': 'product-item__name'}).get_text()
+        category = name.split(' ')[0]
         link = product.find('a')['href']
         try:
-
+            if i > 10:
+                raise ValueError
             item_data = parse_product_item(link)
-            category = name.split(' ')[0]
             data.append({
                 'name': name,
                 'category': category,
@@ -68,8 +73,13 @@ def parse_product_list(html: str) -> List[Dict[str, str]]:
             })
         except Exception:
             traceback.print_exc()
+            errors.append({
+                'name': name,
+                'category': category,
+                'link': link
+            })
 
-    return data
+    return data, errors
 
 
 def parse_product_item(link: str) -> Dict[str, str]:
@@ -99,7 +109,7 @@ def parse_product_item(link: str) -> Dict[str, str]:
     }
 
 
-def save_as_sheet(data: List[Dict[str, str]]) -> None:
+def save_as_sheet(success_products: List[Dict[str, str]], error_products: List[Dict[str, str]]) -> None:
     sheet_headers = ['Название', 'Категория', 'Пол', 'Артикул', 'Описание', 'Цвета',
                      'SEO заголовок', 'SEO описание', 'SEO ключевые слова ']
     workbook = xlsxwriter.Workbook('puma_products.xlsx', {'in_memory': True})
@@ -108,7 +118,15 @@ def save_as_sheet(data: List[Dict[str, str]]) -> None:
     for i, header in enumerate(sheet_headers):
         worksheet.write(0, i, header)
 
-    for i, row in enumerate(data, 1):
+    for i, row in enumerate(success_products, 1):
+        for j, value in enumerate(row.values(), 0):
+            worksheet.write(i, j, value)
+
+    worksheet.write(i + 2, 0, 'Ошибки')
+    for j, header in enumerate(['Название', 'Категория', 'Ссылка на товар']):
+        worksheet.write(i + 3, j, header)
+
+    for i, row in enumerate(error_products, i + 3):
         for j, value in enumerate(row.values(), 0):
             worksheet.write(i, j, value)
 
